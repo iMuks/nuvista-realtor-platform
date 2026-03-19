@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Building2, Users, Search, Bell,
   LogOut, Menu, X, ChevronDown, Home, ExternalLink,
 } from 'lucide-react';
+import ChatbotWidget from '../chatbot/ChatbotWidget';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -178,6 +179,9 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Global AI Chatbot – persists across all dashboard pages */}
+      <ChatbotWidget />
     </div>
   );
 }
