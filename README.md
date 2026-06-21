@@ -6,20 +6,9 @@ A modern, HouseSigma-inspired real estate platform with live IDX listing sync, a
 
 A walkthrough of the app running locally (frontend + backend + MongoDB):
 
-<!--
-  HOW TO ADD YOUR VIDEO:
-  • Drag-and-drop your screen recording (.mp4 / .mov) directly into this section
-    on the GitHub web editor — GitHub uploads it and inserts a link automatically.
-  • OR commit the file to docs/ and reference it, e.g.:
-        https://github.com/iMuks/nuvista-realtor-platform/assets/<id>/<file>.mp4
-  • OR link an external host (Loom / YouTube) using the badge below.
--->
+<video src="https://github.com/iMuks/nuvista-realtor-platform/raw/main/docs/local-deployment-demo.mp4" controls width="100%"></video>
 
-> 📌 _Recording placeholder — drop your `.mp4`/`.mov` here, or replace this line with a Loom/YouTube link._
-
-<!-- Example once uploaded:
-https://github.com/iMuks/nuvista-realtor-platform/assets/00000000/demo.mp4
--->
+▶️ **[Watch the local deployment demo](docs/local-deployment-demo.mp4)** _(if the player above doesn't load inline)_
 
 ## Tech Stack
 
