@@ -1,6 +1,8 @@
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bed, Bath, Maximize, Eye, MapPin } from 'lucide-react';
+import { Bed, Bath, Maximize, Eye, MapPin, ChevronLeft, ChevronRight, Images } from 'lucide-react';
 import type { Property } from '../../types';
+import { preloadImages, preloadImage } from '../../utils/imageCache';
 
 interface PropertyCardProps {
   property: Property;
@@ -15,11 +17,11 @@ function formatPrice(val: number): string {
 }
 
 const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
-  active:      { label: 'Active',        bg: '#d1fae5', text: '#065f46' },
-  sold:        { label: 'Sold',          bg: '#dbeafe', text: '#1e40af' },
-  pending:     { label: 'Under Contract',bg: '#fef3c7', text: '#92400e' },
-  coming_soon: { label: 'Coming Soon',   bg: '#ede9fe', text: '#4c1d95' },
-  delisted:    { label: 'Delisted',      bg: '#f3f4f6', text: '#374151' },
+  active:      { label: 'Active',         bg: '#d1fae5', text: '#065f46' },
+  sold:        { label: 'Sold',           bg: '#dbeafe', text: '#1e40af' },
+  pending:     { label: 'Under Contract', bg: '#fef3c7', text: '#92400e' },
+  coming_soon: { label: 'Coming Soon',    bg: '#ede9fe', text: '#4c1d95' },
+  delisted:    { label: 'Delisted',       bg: '#f3f4f6', text: '#374151' },
 };
 
 function isNewListing(listedDate: string): boolean {
@@ -30,25 +32,60 @@ function daysAgo(date: string): number {
   return Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
 }
 
+const FALLBACK = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop&q=80';
+
 export default function PropertyCard({
   property, onClick, highlighted = false, size = 'default',
 }: PropertyCardProps) {
   const navigate = useNavigate();
+
+  // Build ordered image list: primary first, then the rest
+  const images = (() => {
+    const imgs = property.images ?? [];
+    const primary = imgs.find((img) => img.isPrimary);
+    const rest    = imgs.filter((img) => !img.isPrimary);
+    return primary ? [primary, ...rest] : imgs.length > 0 ? imgs : [{ url: FALLBACK, isPrimary: true, caption: '' }];
+  })();
+
+  const [idx, setIdx] = useState(0);
+  const [imgError, setImgError] = useState<Record<number, boolean>>({});
+
+  const currentUrl = imgError[idx] ? FALLBACK : (images[idx]?.url ?? FALLBACK);
+  const total      = images.length;
+
+  // Preload all images for this property on mount
+  useEffect(() => {
+    const urls = images.map((img) => img.url).filter(Boolean);
+    preloadImages(urls);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Preload the next image ahead of time when idx changes
+  useEffect(() => {
+    if (total > 1) {
+      const nextUrl = images[(idx + 1) % total]?.url;
+      if (nextUrl) preloadImage(nextUrl);
+    }
+  }, [idx, total, images]);
+
+  const prev = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIdx((i) => (i - 1 + total) % total);
+  }, [total]);
+
+  const next = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIdx((i) => (i + 1) % total);
+  }, [total]);
 
   const handleClick = () => {
     if (onClick) onClick();
     navigate(`/properties/${property._id}`);
   };
 
-  const primaryImage =
-    property.images?.find((img) => img.isPrimary)?.url ||
-    property.images?.[0]?.url ||
-    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop&q=80';
-
-  const status   = statusConfig[property.status] ?? { label: property.status, bg: '#f3f4f6', text: '#374151' };
-  const isNew    = isNewListing(property.listedDate);
-  const dListed  = daysAgo(property.listedDate);
-  const isLarge  = size === 'large';
+  const status  = statusConfig[property.status] ?? { label: property.status, bg: '#f3f4f6', text: '#374151' };
+  const isNew   = isNewListing(property.listedDate);
+  const dListed = daysAgo(property.listedDate);
+  const isLarge = size === 'large';
 
   return (
     <article
@@ -79,14 +116,17 @@ export default function PropertyCard({
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
     >
-      {/* ── Image ── */}
+      {/* ── Image carousel ── */}
       <div className={`relative overflow-hidden bg-gray-100 ${isLarge ? 'aspect-[4/3]' : 'aspect-[16/10]'}`}>
+
+        {/* Current image */}
         <img
-          src={primaryImage}
-          alt={property.title}
-          className="w-full h-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.19,1,0.22,1)]
-                     group-hover:scale-[1.06]"
+          key={currentUrl}
+          src={currentUrl}
+          alt={images[idx]?.caption || property.title}
+          className="w-full h-full object-cover transition-all duration-500"
           loading="lazy"
+          onError={() => setImgError((prev) => ({ ...prev, [idx]: true }))}
         />
 
         {/* Gradient */}
@@ -95,6 +135,49 @@ export default function PropertyCard({
         {/* Gold top accent line on hover */}
         <div className="absolute top-0 inset-x-0 h-[3px] bg-gold-400 origin-left scale-x-0
                         group-hover:scale-x-100 transition-transform duration-500 ease-out z-10" />
+
+        {/* Prev / Next arrows — only show when multiple images */}
+        {total > 1 && (
+          <>
+            <button
+              onClick={prev}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-20
+                         w-7 h-7 rounded-full bg-black/40 hover:bg-black/65
+                         flex items-center justify-center text-white
+                         opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                         backdrop-blur-sm"
+              aria-label="Previous photo"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={next}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20
+                         w-7 h-7 rounded-full bg-black/40 hover:bg-black/65
+                         flex items-center justify-center text-white
+                         opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                         backdrop-blur-sm"
+              aria-label="Next photo"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Dot indicators */}
+            <div className="absolute bottom-10 inset-x-0 flex justify-center gap-1 z-20
+                            opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+                  className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
+                    i === idx ? 'bg-white scale-125' : 'bg-white/50'
+                  }`}
+                  aria-label={`Photo ${i + 1}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Status badge */}
         <span
@@ -112,6 +195,25 @@ export default function PropertyCard({
           </span>
         )}
 
+        {/* Photo count badge (bottom right, only multiple) */}
+        {total > 1 && (
+          <div className="absolute bottom-4 right-4 flex items-center gap-1
+                          bg-black/40 backdrop-blur-sm text-white text-[10px]
+                          font-semibold px-2 py-0.5 rounded-full z-10">
+            <Images className="w-3 h-3" />
+            {idx + 1}/{total}
+          </div>
+        )}
+
+        {/* Views (bottom right, only 1 image) */}
+        {total === 1 && (
+          <div className="absolute bottom-4 right-4 flex items-center gap-1
+                          text-white/60 text-[11px] z-10">
+            <Eye className="w-3.5 h-3.5" />
+            <span>{property.views}</span>
+          </div>
+        )}
+
         {/* Price (bottom left) */}
         <div className="absolute bottom-0 inset-x-0 p-4 z-10">
           <p className="font-display font-bold text-white leading-none drop-shadow-lg"
@@ -123,13 +225,6 @@ export default function PropertyCard({
               Sold: {formatPrice(property.soldPrice)}
             </p>
           )}
-        </div>
-
-        {/* Views (bottom right) */}
-        <div className="absolute bottom-4 right-4 flex items-center gap-1
-                        text-white/60 text-[11px] z-10">
-          <Eye className="w-3.5 h-3.5" />
-          <span>{property.views}</span>
         </div>
       </div>
 
@@ -177,7 +272,7 @@ export default function PropertyCard({
         {/* Agent + MLS */}
         <div className="flex items-center justify-between mt-3">
           <p className="text-[11.5px] text-gray-400 truncate">
-            {property.agent.firstName} {property.agent.lastName}
+            {property.agent ? `${property.agent.firstName} ${property.agent.lastName}` : 'NuVista Realty'}
           </p>
           {property.mlsNumber && (
             <p className="text-[11px] text-gray-300 font-mono flex-shrink-0 ml-2">

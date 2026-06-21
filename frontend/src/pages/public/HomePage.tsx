@@ -7,7 +7,8 @@ import FilterBar, { type PublicFilters } from '../../components/public/FilterBar
 import PropertyCard from '../../components/public/PropertyCard';
 import PropertyMap from '../../components/public/PropertyMap';
 import AgentCard from '../../components/public/AgentCard';
-import { usePublicProperties, MOCK_PUBLIC_PROPERTIES } from '../../hooks/useProperties';
+import { usePublicProperties, useAvailableCities, MOCK_PUBLIC_PROPERTIES } from '../../hooks/useProperties';
+import { preloadImages } from '../../utils/imageCache';
 import type { User } from '../../types';
 
 /* ── Scroll-reveal hook ─────────────────────────────────── */
@@ -55,7 +56,7 @@ const MOCK_AGENTS: User[] = [
 ];
 
 function agentListingCount(id: string) {
-  return MOCK_PUBLIC_PROPERTIES.filter((p) => p.agent._id === id && p.status === 'active').length;
+  return MOCK_PUBLIC_PROPERTIES.filter((p) => p.agent?._id === id && p.status === 'active').length;
 }
 
 /* ── Why Choose NuVista data ─────────────────────────────── */
@@ -108,15 +109,30 @@ export default function HomePage() {
   const [filters,       setFilters]       = useState<PublicFilters>({});
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
 
+  const { data: availableCities = [] } = useAvailableCities();
+
   /* React Query — auto-refetch every 30s */
-  const { data: propertiesData } = usePublicProperties({
+  const { data: propertiesData, isFetching } = usePublicProperties({
     city:         filters.location,
     propertyType: filters.propertyType,
     status:       filters.status,
   });
 
-  const properties = propertiesData?.data ?? MOCK_PUBLIC_PROPERTIES;
+  // Show real API data when available; fall back to mock only on cold load with no filters
+  const hasActiveFilters = Object.values(filters).some((v) => v !== undefined && v !== '');
+  const properties = propertiesData?.data ?? (hasActiveFilters ? [] : MOCK_PUBLIC_PROPERTIES);
   const total      = propertiesData?.pagination?.total ?? properties.length;
+
+  // True loading = fetching AND no data at all to show yet
+  const isLoadingFresh = isFetching && propertiesData === undefined;
+
+  // Preload all primary images when the property list changes
+  useEffect(() => {
+    const urls = properties.flatMap((p) =>
+      (p.images ?? []).map((img) => img.url).filter(Boolean)
+    );
+    preloadImages(urls);
+  }, [properties]);
 
   /* Client-side price/bed/sort filter */
   const filtered = useMemo(() => {
@@ -171,8 +187,15 @@ export default function HomePage() {
             <div>
               <p className="label-overline mb-2">Live Listings</p>
               <h2 className="section-title">Browse Properties</h2>
-              <p className="text-gray-400 text-sm mt-2 font-medium">
-                {total} properties match your search
+              <p className="text-gray-400 text-sm mt-2 font-medium flex items-center gap-2">
+                {isLoadingFresh ? (
+                  <>
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-navy-300 border-t-navy-500 rounded-full animate-spin" />
+                    Searching listings…
+                  </>
+                ) : (
+                  <>{total} {total === 1 ? 'property' : 'properties'} match your search</>
+                )}
               </p>
             </div>
             <Link
@@ -200,12 +223,50 @@ export default function HomePage() {
                 />
               </div>
 
-              {/* Cards */}
-              {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl
-                                border border-gray-100 text-center">
-                  <p className="font-display text-navy-300 text-2xl mb-2">No results</p>
-                  <p className="text-gray-400 text-sm mb-5">Try adjusting your filters</p>
+              {/* Cards — loading skeleton */}
+              {isLoadingFresh ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse"
+                         style={{ boxShadow: '0 2px 16px rgba(15,43,82,0.07)' }}>
+                      <div className="aspect-[16/10] bg-gray-200" />
+                      <div className="p-5 space-y-3">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        <div className="h-3 bg-gray-100 rounded w-1/2" />
+                        <div className="h-px bg-gray-100" />
+                        <div className="flex gap-4">
+                          <div className="h-3 bg-gray-100 rounded w-12" />
+                          <div className="h-3 bg-gray-100 rounded w-12" />
+                          <div className="h-3 bg-gray-100 rounded w-16" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl
+                                border border-gray-100 text-center px-6">
+                  <p className="text-3xl mb-3">🔍</p>
+                  <p className="font-display text-navy-800 text-xl font-semibold mb-1">No listings found</p>
+                  <p className="text-gray-400 text-sm mb-5">
+                    {filters.location
+                      ? `No properties found in "${filters.location}". Try one of the available cities below:`
+                      : 'Try adjusting your filters'}
+                  </p>
+                  {filters.location && availableCities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-center mb-5">
+                      {availableCities.slice(0, 8).map((city) => (
+                        <button
+                          key={city}
+                          onClick={() => setFilters({ ...filters, location: city })}
+                          className="px-3.5 py-1.5 rounded-full text-[13px] font-medium border border-navy-200
+                                     text-navy-600 hover:bg-navy-50 transition-colors"
+                        >
+                          {city}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <button
                     onClick={() => setFilters({})}
                     className="btn-navy text-sm px-5 py-2"

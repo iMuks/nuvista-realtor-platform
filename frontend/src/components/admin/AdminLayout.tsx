@@ -4,8 +4,10 @@ import { useAuthStore } from '../../hooks/useAuth';
 import {
   LayoutDashboard, Building2, Users, Search, Bell,
   LogOut, Menu, X, ChevronDown, Home, ExternalLink,
+  RefreshCw, Wifi, WifiOff,
 } from 'lucide-react';
 import ChatbotWidget from '../chatbot/ChatbotWidget';
+import { useSync } from '../../hooks/useSync';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -18,6 +20,7 @@ export default function AdminLayout() {
   const [profileOpen, setProfileOpen] = useState(false);
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const { syncStatus, connected } = useSync();
 
   const handleLogout = () => {
     logout();
@@ -133,6 +136,29 @@ export default function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-2 ml-4">
+            {/* IDX Sync status pill */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px]">
+              {syncStatus?.status === 'running' ? (
+                <>
+                  <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
+                  <span className="text-amber-400 font-medium">Syncing…</span>
+                </>
+              ) : connected ? (
+                <>
+                  <Wifi className="w-3 h-3 text-emerald-400" />
+                  <span className="text-emerald-400 font-medium">Live</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3 h-3 text-slate-500" />
+                  <span className="text-slate-500">Offline</span>
+                </>
+              )}
+              {syncStatus && syncStatus.totalSynced > 0 && (
+                <span className="text-slate-500 ml-0.5">{syncStatus.totalSynced.toLocaleString()} listings</span>
+              )}
+            </div>
+
             {/* Notifications */}
             <button
               className="relative p-2 rounded-xl hover:bg-white/[0.05] text-slate-400 hover:text-white transition-colors"

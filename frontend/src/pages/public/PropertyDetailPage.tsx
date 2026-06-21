@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { preloadImages, preloadImage } from '../../utils/imageCache';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Bed, Bath, Maximize, MapPin, Eye,
@@ -110,6 +111,12 @@ function HeroCarousel({ images }: { images: Property['images']; title: string })
   }, [total]);
 
   useEffect(() => { startTimer(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, [startTimer]);
+
+  // Preload all gallery images on mount, then preload next on slide change
+  useEffect(() => { preloadImages(sorted.map((img) => img.url).filter(Boolean)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (total > 1) { const next = sorted[(idx + 1) % total]?.url; if (next) preloadImage(next); }
+  }, [idx, total, sorted]);
 
   const goTo = (n: number) => { setIdx(((n % total) + total) % total); startTimer(); };
 
@@ -802,11 +809,11 @@ export default function PropertyDetailPage() {
                     boxShadow: '0 4px 16px rgba(15,43,82,0.25)',
                   }}
                 >
-                  {property.agent.firstName[0]}{property.agent.lastName[0]}
+                  {property.agent ? `${property.agent.firstName[0]}${property.agent.lastName[0]}` : 'NV'}
                 </div>
                 <div>
                   <p className="font-semibold text-[15px] leading-tight" style={{ color: '#0a1628' }}>
-                    {property.agent.firstName} {property.agent.lastName}
+                    {property.agent ? `${property.agent.firstName} ${property.agent.lastName}` : 'NuVista Realty'}
                   </p>
                   <p className="text-[11.5px] font-semibold mt-0.5" style={{ color: '#beaf87' }}>NuVista Realty</p>
                   <div className="flex items-center gap-1 mt-1">
@@ -819,7 +826,7 @@ export default function PropertyDetailPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                {property.agent.phone && (
+                {property.agent?.phone && (
                   <a
                     href={`tel:${property.agent.phone.replace(/\D/g, '')}`}
                     className="flex items-center justify-center gap-2.5 py-3 rounded-xl
@@ -835,21 +842,39 @@ export default function PropertyDetailPage() {
                     {property.agent.phone}
                   </a>
                 )}
-                <a
-                  href={`mailto:${property.agent.email}`}
-                  className="flex items-center justify-center gap-2.5 py-3 rounded-xl
-                             font-semibold text-[13.5px] transition-all duration-300 hover:scale-[1.02]"
-                  style={{
-                    background: 'rgba(15,43,82,0.05)',
-                    color: '#0f2b52',
-                    border: '1px solid rgba(15,43,82,0.12)',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(15,43,82,0.09)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(15,43,82,0.05)')}
-                >
-                  <Mail style={{ width: 14, height: 14 }} />
-                  Send Email
-                </a>
+                {property.agent?.email ? (
+                  <a
+                    href={`mailto:${property.agent.email}`}
+                    className="flex items-center justify-center gap-2.5 py-3 rounded-xl
+                               font-semibold text-[13.5px] transition-all duration-300 hover:scale-[1.02]"
+                    style={{
+                      background: 'rgba(15,43,82,0.05)',
+                      color: '#0f2b52',
+                      border: '1px solid rgba(15,43,82,0.12)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(15,43,82,0.09)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(15,43,82,0.05)')}
+                  >
+                    <Mail style={{ width: 14, height: 14 }} />
+                    Send Email
+                  </a>
+                ) : (
+                  <a
+                    href="mailto:info@nuvistarealty.com"
+                    className="flex items-center justify-center gap-2.5 py-3 rounded-xl
+                               font-semibold text-[13.5px] transition-all duration-300 hover:scale-[1.02]"
+                    style={{
+                      background: 'rgba(15,43,82,0.05)',
+                      color: '#0f2b52',
+                      border: '1px solid rgba(15,43,82,0.12)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(15,43,82,0.09)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(15,43,82,0.05)')}
+                  >
+                    <Mail style={{ width: 14, height: 14 }} />
+                    Contact Agent
+                  </a>
+                )}
               </div>
             </div>
 

@@ -17,7 +17,16 @@ export const getProperties = asyncHandler(
 
     const filter: Record<string, any> = {};
 
-    if (city) filter['address.city'] = new RegExp(city, 'i');
+    if (city) {
+      // Handle "City, Province, Country" format — extract just the city token
+      const cityToken = (city as string).split(',')[0].trim();
+      const re = new RegExp(cityToken, 'i');
+      filter.$or = [
+        { 'address.city': re },
+        { 'address.province': re },
+        { neighbourhood: re },
+      ];
+    }
     if (province) filter['address.province'] = province;
     if (propertyType) filter.propertyType = { $in: propertyType.split(',') };
     if (status) filter.status = { $in: status.split(',') };
@@ -177,6 +186,18 @@ export const deleteProperty = asyncHandler(
 
     await property.deleteOne();
     res.status(200).json({ success: true, data: null });
+  }
+);
+
+// GET /api/properties/cities — distinct city list for search autocomplete
+export const getCities = asyncHandler(
+  async (_req: Request, res: Response) => {
+    const cities: string[] = await Property.distinct('address.city');
+    const neighbourhoods: string[] = await Property.distinct('neighbourhood');
+    const combined = Array.from(
+      new Set([...cities, ...neighbourhoods.filter(Boolean)])
+    ).sort();
+    res.status(200).json({ success: true, data: combined });
   }
 );
 

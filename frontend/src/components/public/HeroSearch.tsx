@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Search, ChevronDown } from 'lucide-react';
+import { useAvailableCities } from '../../hooks/useProperties';
 
 export interface SearchFilters {
   location?: string;
@@ -18,7 +19,7 @@ const BG_IMAGES = [
   'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1920&h=1080&fit=crop&q=85',
 ];
 
-const CITIES = ['Toronto', 'Mississauga', 'Oakville', 'Burlington', 'London'];
+const FALLBACK_CITIES = ['Toronto', 'Mississauga', 'Oakville', 'Burlington', 'London'];
 const TABS   = ['Buy', 'Sell', 'New Developments'];
 
 const PROPERTY_TYPES = [
@@ -65,6 +66,22 @@ export default function HeroSearch({ onSearch }: HeroSearchProps) {
   const [cityIdx,      setCityIdx]      = useState(0);
   const [cityVisible,  setCityVisible]  = useState(true);
   const [mounted,      setMounted]      = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const locationRef = useRef<HTMLDivElement>(null);
+
+  const { data: liveCities = FALLBACK_CITIES } = useAvailableCities();
+  const CITIES = liveCities.length > 0 ? liveCities : FALLBACK_CITIES;
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // Mount animation trigger
   useEffect(() => {
@@ -227,24 +244,50 @@ export default function HeroSearch({ onSearch }: HeroSearchProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
 
               {/* Location */}
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1" ref={locationRef}>
                 <label className="block text-[10.5px] font-semibold text-gray-400 mb-1.5 uppercase tracking-[0.1em]">
                   Location
                 </label>
                 <div className="relative">
-                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gold-500 pointer-events-none" />
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gold-500 pointer-events-none z-10" />
                   <input
                     type="text"
                     value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    onChange={(e) => { setLocation(e.target.value); setShowSuggestions(true); }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setShowSuggestions(false); handleSearch(); } if (e.key === 'Escape') setShowSuggestions(false); }}
                     placeholder="City, neighbourhood…"
                     className="w-full pl-10 pr-3.5 py-3 rounded-xl text-sm text-gray-900
                                placeholder-gray-400 border border-gray-200 bg-white
                                focus:outline-none focus:border-navy-400 focus:ring-2 focus:ring-navy-500/10
                                transition-all duration-200"
                     aria-label="Location"
+                    autoComplete="off"
                   />
+                  {/* City suggestions dropdown */}
+                  {showSuggestions && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200
+                                    shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto">
+                      {CITIES
+                        .filter((c) => !location || c.toLowerCase().includes(location.toLowerCase()))
+                        .slice(0, 8)
+                        .map((city) => (
+                          <button
+                            key={city}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); setLocation(city); setShowSuggestions(false); }}
+                            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm
+                                       text-gray-700 hover:bg-navy-50 hover:text-navy-600 transition-colors"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-gold-500 flex-shrink-0" />
+                            {city}
+                          </button>
+                        ))}
+                      {CITIES.filter((c) => !location || c.toLowerCase().includes(location.toLowerCase())).length === 0 && (
+                        <p className="px-3.5 py-2.5 text-sm text-gray-400">No matching cities in database</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

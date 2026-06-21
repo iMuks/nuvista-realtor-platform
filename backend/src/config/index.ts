@@ -21,11 +21,21 @@ export const config = {
   },
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
   },
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
     max: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+  },
+  idx: {
+    provider: process.env.IDX_PROVIDER || 'simplyrets',
+    apiUrl: process.env.IDX_API_URL || 'https://api.simplyrets.com',
+    apiKey: process.env.IDX_API_KEY || 'simplyrets',
+    apiSecret: process.env.IDX_API_SECRET || 'simplyrets',
+    syncIntervalMinutes: parseInt(process.env.SYNC_INTERVAL_MINUTES || '15', 10),
+    batchSize: parseInt(process.env.SYNC_BATCH_SIZE || '50', 10),
   },
 };
 

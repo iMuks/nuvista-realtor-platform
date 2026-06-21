@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../services/api';
 import type { PropertyFilters } from '../types';
 
@@ -20,26 +21,61 @@ export interface PublicDashboardStats {
   conversionRate: number;
 }
 
+type PropertiesResult = {
+  success: boolean;
+  data: import('../types').Property[];
+  pagination: { total: number; page: number; limit: number; pages: number };
+};
+
 export function usePublicProperties(filters?: PropertyFilters) {
-  return useQuery({
-    queryKey: ['public-properties', filters],
-    queryFn: async () => {
-      try {
-        const result = await api.getProperties(filters);
-        return result;
-      } catch {
-        // Return mock data when API is unavailable
-        return {
-          success: true,
-          data: MOCK_PUBLIC_PROPERTIES,
-          pagination: { total: MOCK_PUBLIC_PROPERTIES.length, page: 1, limit: 20, pages: 1 },
-        };
-      }
-    },
-    staleTime: 15_000,
-    refetchInterval: 30_000,
-    retry: 1,
-  });
+  const [data, setData] = useState<PropertiesResult | undefined>(undefined);
+  const [isFetching, setIsFetching] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Destructure for stable useEffect deps
+  const city         = filters?.city;
+  const propertyType = filters?.propertyType;
+  const status       = filters?.status;
+  const sortBy       = filters?.sortBy;
+  const bedroomsMin  = filters?.bedroomsMin;
+  const priceMin     = filters?.priceMin;
+  const priceMax     = filters?.priceMax;
+
+  useEffect(() => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
+
+    setIsFetching(true);
+
+    api.getProperties({ city, propertyType, status, sortBy, bedroomsMin, priceMin, priceMax, limit: 50 })
+      .then((result) => {
+        if (!signal.aborted) {
+          setData(result as PropertiesResult);
+          setIsFetching(false);
+        }
+      })
+      .catch((err) => {
+        if (!signal.aborted) {
+          console.error('[usePublicProperties] API error:', err);
+          const hasFilters = !!(city || propertyType || status);
+          if (hasFilters) {
+            setData({ success: true, data: [], pagination: { total: 0, page: 1, limit: 50, pages: 0 } });
+          } else {
+            setData({
+              success: true,
+              data: MOCK_PUBLIC_PROPERTIES,
+              pagination: { total: MOCK_PUBLIC_PROPERTIES.length, page: 1, limit: 50, pages: 1 },
+            });
+          }
+          setIsFetching(false);
+        }
+      });
+
+    return () => { abortRef.current?.abort(); };
+  }, [city, propertyType, status, sortBy, bedroomsMin, priceMin, priceMax]);
+
+  return { data, isFetching, isLoading: isFetching && data === undefined };
 }
 
 export function useProperty(id: string) {
@@ -65,7 +101,24 @@ export function useMarketStats(city?: string) {
     queryFn: async () => {
       try {
         const result = await api.getMarketStats(city);
-        return result as MarketStats;
+        // API returns { byStatus: [...], topNeighbourhoods: [...] } — transform it
+        const byStatus: Array<{ _id: string; count: number; avgPrice: number }> =
+          result?.byStatus ?? [];
+        const activeEntry = byStatus.find((s) => s._id === 'active');
+        const soldEntry   = byStatus.find((s) => s._id === 'sold');
+        const totalListings = byStatus.reduce((sum, s) => sum + (s.count ?? 0), 0);
+        const totalActive   = activeEntry?.count ?? 0;
+        const soldThisMonth = soldEntry?.count ?? 0;
+        return {
+          totalActive,
+          avgListPrice:     Math.round(activeEntry?.avgPrice ?? 0),
+          soldThisMonth,
+          avgDaysOnMarket:  19,
+          conversionRate:   totalListings > 0
+            ? parseFloat(((soldThisMonth / totalListings) * 100).toFixed(1))
+            : 0,
+          totalListings,
+        };
       } catch {
         return {
           totalActive: 284,
@@ -110,6 +163,22 @@ export function usePublicDashboardStats() {
     },
     staleTime: 60_000,
     refetchInterval: 60_000,
+    retry: 1,
+  });
+}
+
+export function useAvailableCities() {
+  return useQuery<string[]>({
+    queryKey: ['available-cities'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/properties/cities');
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) return json.data as string[];
+      } catch { /* ignore */ }
+      return ['Toronto', 'Mississauga', 'Oakville', 'Burlington', 'London'];
+    },
+    staleTime: 5 * 60_000,
     retry: 1,
   });
 }

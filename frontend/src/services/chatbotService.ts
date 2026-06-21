@@ -6,6 +6,7 @@
 
 import type { ChatMessage, ChatAttachment, ChatOption, ChatPropertyListing } from '../store/chatbotStore';
 import { MOCK_PUBLIC_PROPERTIES } from '../hooks/useProperties';
+import type { Property } from '../types';
 
 const uuid = () =>
   `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -17,7 +18,7 @@ type BotResponse = Pick<
 
 /* ─────────────────────── Property search engine ─────────────────────── */
 
-function toListingCard(p: (typeof MOCK_PUBLIC_PROPERTIES)[0]): ChatPropertyListing {
+function toListingCard(p: Property): ChatPropertyListing {
   return {
     _id: p._id,
     title: p.title,
@@ -35,6 +36,21 @@ function toListingCard(p: (typeof MOCK_PUBLIC_PROPERTIES)[0]): ChatPropertyListi
   };
 }
 
+/** Fetch up to 100 active listings from the live API, fallback to mock data */
+async function fetchLiveProperties(): Promise<Property[]> {
+  try {
+    const res = await fetch('/api/properties?limit=100&status=active');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+      return json.data as Property[];
+    }
+  } catch {
+    // backend offline — fall through to mock data
+  }
+  return MOCK_PUBLIC_PROPERTIES;
+}
+
 interface SearchFilters {
   status?: string[];
   type?: string[];
@@ -45,8 +61,9 @@ interface SearchFilters {
   sortBy?: 'newest' | 'price_asc' | 'price_desc' | 'days_asc';
 }
 
-function searchProperties(filters: SearchFilters): ChatPropertyListing[] {
-  let results = [...MOCK_PUBLIC_PROPERTIES];
+async function searchProperties(filters: SearchFilters): Promise<ChatPropertyListing[]> {
+  const all = await fetchLiveProperties();
+  let results = [...all];
 
   if (filters.status?.length)
     results = results.filter((p) => filters.status!.includes(p.status));
@@ -80,7 +97,7 @@ function searchProperties(filters: SearchFilters): ChatPropertyListing[] {
       break;
   }
 
-  return results.map(toListingCard);
+  return results.map((p) => toListingCard(p));
 }
 
 /** Parse free-text query into filters */
@@ -170,9 +187,9 @@ const LEAD_STAGES = [
 
 /* ──────────────────────── Property listing intent ───────────────────── */
 
-function propertyListingResponse(input: string): BotResponse {
+async function propertyListingResponse(input: string): Promise<BotResponse> {
   const { filters, label } = parseListingQuery(input);
-  const listings = searchProperties(filters);
+  const listings = await searchProperties(filters);
 
   if (listings.length === 0) {
     return {
@@ -201,7 +218,7 @@ function propertyListingResponse(input: string): BotResponse {
 
 interface IntentRule {
   patterns: RegExp[];
-  handler: (input: string, attachments?: ChatAttachment[]) => BotResponse;
+  handler: (input: string, attachments?: ChatAttachment[]) => BotResponse | Promise<BotResponse>;
 }
 
 const intentRules: IntentRule[] = [
@@ -217,7 +234,7 @@ const intentRules: IntentRule[] = [
       /\d\s*(bed|bedroom|br)\s*(houses?|condos?|homes?|listings?|townhouses?)/i,
       /(available|active)\s*(properties|listings?|homes?|houses?)/i,
     ],
-    handler: (input) => propertyListingResponse(input),
+    handler: async (input) => propertyListingResponse(input),
   },
 
   /* ── Greetings ── */
@@ -620,7 +637,7 @@ export async function getBotResponse(
       rule.patterns.some((p) => p.test(userText))
     );
     response = matched
-      ? matched.handler(userText, attachments)
+      ? await matched.handler(userText, attachments)
       : fallback(userText);
   } else if (attachments && attachments.length > 0) {
     // Attachment only

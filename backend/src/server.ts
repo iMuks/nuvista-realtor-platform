@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -9,9 +10,12 @@ import mongoSanitize from 'express-mongo-sanitize';
 import { config, connectDB } from './config';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
+import { initSocket } from './services/socketService';
+import { startScheduler } from './jobs/scheduler';
 import routes from './routes';
 
 const app = express();
+const httpServer = createServer(app);
 
 // ─── Security Middleware ─────────────────────────────────
 app.use(helmet());
@@ -84,11 +88,18 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    app.listen(config.port, () => {
+    // Initialise WebSocket
+    initSocket(httpServer);
+
+    httpServer.listen(config.port, () => {
       logger.info(
         `🚀 RealtorHub API running on port ${config.port} [${config.env}]`
       );
     });
+
+    // Start property sync scheduler (after DB is ready)
+    await startScheduler();
+
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);

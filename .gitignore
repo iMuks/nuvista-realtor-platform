@@ -35,3 +35,7 @@ coverage/
 # Misc
 *.tgz
 .cache/
+
+# extra secret env
+.env.qa
+backend/.env.qa

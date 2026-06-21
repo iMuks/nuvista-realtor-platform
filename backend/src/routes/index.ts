@@ -5,6 +5,7 @@ import * as authCtrl from '../controllers/authController';
 import * as propertyCtrl from '../controllers/propertyController';
 import * as leadCtrl from '../controllers/leadController';
 import * as dashCtrl from '../controllers/dashboardController';
+import syncRoutes from './sync';
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.get('/dashboard', protect, dashCtrl.getDashboardStats);
 
 // ─── Property Routes ─────────────────────────────────────
 router.get('/properties', propertyCtrl.getProperties);
+router.get('/properties/cities', propertyCtrl.getCities);
 router.get('/properties/nearby', propertyCtrl.getNearbyProperties);
 router.get('/properties/stats/market', propertyCtrl.getMarketStats);
 router.get('/properties/:id', propertyCtrl.getProperty);
@@ -41,5 +43,8 @@ router.delete(
   authorize(UserRole.ADMIN, UserRole.BROKER),
   leadCtrl.deleteLead
 );
+
+// ─── Sync / IDX Routes ───────────────────────────────────
+router.use('/sync', syncRoutes);
 
 export default router;

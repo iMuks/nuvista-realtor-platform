@@ -81,14 +81,14 @@ function MapController({ properties }: { properties: Property[] }) {
     if (validCoords.length === 0) return;
 
     if (validCoords.length === 1) {
-      const [lng, lat] = validCoords[0].address.location.coordinates;
-      map.flyTo([lat, lng], 13, { duration: 0.8 });
+      const coords = validCoords[0].address.location!.coordinates;
+      map.flyTo([coords[1], coords[0]], 13, { duration: 0.8 });
       return;
     }
 
     const bounds = L.latLngBounds(
       validCoords.map((p) => {
-        const [lng, lat] = p.address.location.coordinates;
+        const [lng, lat] = p.address.location!.coordinates;
         return [lat, lng] as [number, number];
       })
     );

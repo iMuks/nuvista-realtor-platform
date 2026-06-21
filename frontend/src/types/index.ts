@@ -34,7 +34,7 @@ export interface Address {
   province: string;
   postalCode: string;
   country: string;
-  location: GeoLocation;
+  location?: GeoLocation;
 }
 
 export interface PropertyImage {
@@ -64,7 +64,7 @@ export interface Property {
   garage?: boolean;
   features: string[];
   images: PropertyImage[];
-  agent: Pick<User, '_id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'avatar'>;
+  agent?: Pick<User, '_id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'avatar'>;
   views: number;
   favorites: number;
   daysOnMarket: number;

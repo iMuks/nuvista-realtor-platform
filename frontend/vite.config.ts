@@ -18,8 +18,19 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5001',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (_proxyReq, req) => {
+            console.log('[proxy →]', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('[proxy ←]', proxyRes.statusCode, req.url);
+          });
+          proxy.on('error', (err, req) => {
+            console.error('[proxy ERR]', req.url, err.message);
+          });
+        },
       },
     },
   },

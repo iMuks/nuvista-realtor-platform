@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
 
 export interface PublicFilters {
@@ -43,9 +43,24 @@ const BEDROOM_OPTIONS = [
 
 export default function FilterBar({ filters, onFilterChange, total }: FilterBarProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [locationInput, setLocationInput] = useState(filters.location || '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync external filter changes (e.g. HeroSearch sets location) into local input state
+  useEffect(() => {
+    setLocationInput(filters.location || '');
+  }, [filters.location]);
 
   const update = (key: keyof PublicFilters, value: string) => {
     onFilterChange({ ...filters, [key]: value || undefined });
+  };
+
+  const handleLocationChange = (value: string) => {
+    setLocationInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onFilterChange({ ...filters, location: value || undefined });
+    }, 400);
   };
 
   const clearAll = () => {
@@ -64,8 +79,8 @@ export default function FilterBar({ filters, onFilterChange, total }: FilterBarP
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input
               type="text"
-              value={filters.location || ''}
-              onChange={(e) => update('location', e.target.value)}
+              value={locationInput}
+              onChange={(e) => handleLocationChange(e.target.value)}
               placeholder="City or neighbourhood..."
               className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500/30 transition-all"
               aria-label="Search by location"
